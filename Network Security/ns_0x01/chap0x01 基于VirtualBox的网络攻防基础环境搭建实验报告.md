@@ -21,10 +21,10 @@
 ## 三、实验步骤
 ### 多重加载
 1. 从教学ftp下载.voa文件，导入虚拟电脑
-- 管理->虚拟介质管理->释放
-- 类型设置为【多重加载】
-- 重新给虚拟机添加虚拟硬盘
-- 新建新的虚拟机,选择现有的盘片->成功。
+2. 管理->虚拟介质管理->释放
+3. 类型设置为【多重加载】
+4. 重新给虚拟机添加虚拟硬盘
+5. 新建新的虚拟机,选择现有的盘片->成功。
 	<center>![](img/multipleloading.png)</center>
 	<center>图中共有三个加载点</center>
 
@@ -119,8 +119,9 @@
 	- 解决：全局设置->网络->添加NAT网络
 ### 3. 设置防火墙规则
 - 参考：[https://kali.training/topic/firewall-or-packet-filtering/](https://kali.training/topic/firewall-or-packet-filtering/)
-	<center>![](img/001-netfilter.png)   
-	How Netfilter Chains are Called </center>
+- ![](img/001-netfilter.png)   
+	How Netfilter Chains are Called
+
 - Netfilter uses four distinct tables：filter，nat (Network Address Translation) ，mangle
 	- The filter table has three standard chains:
 		- INPUT: concerns packets whose destination is the firewall itself;
