@@ -60,7 +60,7 @@
 ---
 ### 网络配置
 1. 建立两个隔离的子网
-	<center>![](img/top.png)图1-1 网络拓扑图</center>
+	![](img/top.png)<center>图1-1 网络拓扑图</center>
 	-  NAT network 启用dhcp
 		- Attack,eth0,10.0.2.5/24
 		- GateWay,eth0,10.0.2.4/24
@@ -74,18 +74,18 @@
 - 尝试靶机ping主机，并在网关的两块网卡上抓包
 	- 使用tcpdump命令抓包，查看icmp包转发状态，发现需要在网关上开启ip forward
 	![](img/1-no_ip_forward.png)
-		<center>![](img/top_1.png)图1-2 网关未开启IP forward时icmp包转发情况</center>
+		![](img/top_1.png)<center>图1-2 网关未开启IP forward时icmp包转发情况</center>
 
 	- 配置ip forward `echo 1 >/proc/sys/net/ipv4/ip_forward`
 	![](img/2-ip_forward.png)
-		<center>![](img/top_2.png)图1-3 网关开启IP forward时icmp包转发情况</center>
+	![](img/top_2.png)<center>图1-3 网关开启IP forward时icmp包转发情况</center>
 
 - 尝试靶机ping主机，在主机上抓包，分析icmp包信息
 	![](img/3-ip_forward.png) 
 	- 主机已回复icmp包，根据路由表推测回复包被转发到了Internet（根据实验后期测试，10.0.2.1应该是NAT network的默认网关，用于连接Internet）
 
 	![](img/attack_route_table.png)
-	<center>![](img/top_3.png)图1-4 推测icmp echo reply被转发到互联网</center>
+	![](img/top_3.png)<center>图1-4 推测icmp echo reply被转发到互联网</center>
 
 	- 为了使主机能成功将icmp echo reply成功发送到GateWay的eth0端口上，有两种方法：
 		1. **（不采用）**将主机的default gateway设置为GateWay eth0网卡的ip地址，默认将主机上的包发到GA eth0，但是不采用此方式，这样会导致主机和靶机之间能相互ping通，违反实验目的
@@ -93,7 +93,7 @@
 		![](img/4-firewall_config.png)
 		在主机抓包发现，icmp包在网关上从eth1转发到eth0时源IP被替换为eth0的IP地址，从eth0转发到eth1时目标IP地址又被替换为原来真正的IP地址
 		![](img/5-firewall_config_A.png)
-		<center>![](img/top_4.png)图1-5 设置防火墙规则后能成功转发icmp包</center>
+		![](img/top_4.png)<center>图1-5 设置防火墙规则后能成功转发icmp包</center>
 
 ---
 ### 连通性测试
