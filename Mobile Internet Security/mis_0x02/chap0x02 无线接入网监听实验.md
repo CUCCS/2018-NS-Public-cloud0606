@@ -36,6 +36,9 @@
 - 开启无线网卡
 	
 	![](img/01.png)
+	- 执行 `iwconfig` 查看网卡参数
+	
+		![](img/14.png)
 - 执行 `iw dev wlan0 scan | grep SSID | xargs -0 echo -e`# 仅查看附近无线网络的SSID，自动处理UTF-8编码的SSID名称
 
 		root@kali:~# iw dev wlan0 scan | grep SSID | xargs -0 echo -e
@@ -108,13 +111,12 @@
 			  Maximum TX power: 20.0 dBm
 			  No IR
 			  Channel widths: 20MHz
-- 设置网卡进入监听模式，
+- 设置网卡进入监听模式
 	- 执行 `airmon-ng check kill`
 	- 执行 `airmon-ng start wlan0`
 	- 执行 `iwconfig` ，无线网卡已切换到监听模式
 	
 		![](img/02.png)
-
 - 执行 `airodump-ng wlan0mon --channel 13 -w saved --beacons --wps`选择channel 13 进行定向抓包 
 
 
@@ -151,10 +153,11 @@
 - 打开Wireless->WLAN Traffic，发现当前信号覆盖范围内共有6个独立的SSID，其中没有隐藏的SSID
 		
 	![](img/03.png)
+	- 进一步解析此SSID名称
+	
+		![](img/05.png)
 		
-	![](img/05.png)
-		
-	![](img/04.png)
+		![](img/04.png)
 - 当前范围内未找到隐藏的SSID，但在部分手机广播的Probe Request Frame中可找到Wildcard
 
 	![](img/13.png)
@@ -186,7 +189,7 @@
     	![](img/11.png)
 
 #####  Q3. SSID包含在哪些类型的802.11帧？
-- 管理帧,根据实验可知
+- 管理帧，根据实验可知
 	- beacon frame ✓
 	- Probe request frame ✓
 	- Probe Response frame ✓
@@ -194,7 +197,7 @@
 	
 		![](img/12.png)
 	- Association response frame ✗
-- 控制帧 :
+- 控制帧，手工筛选了控制帧未找到SSID
 	- RTS ✗
  	- CTS ✗
 	- ACK ✗
