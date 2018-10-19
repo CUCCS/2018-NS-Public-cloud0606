@@ -70,6 +70,11 @@
 			- 获取网络中所有存活的主机 `nmap -sP 222.31.66.128/25`
 			- 获取指定开放端口的服务器列表 `nmap -sT -p 80 -oG – 222.31.66.* | grep open `
 			- 寻找一个给定子网中未使用的ip `nmap -T4 -sP 192.168.2.0/24 && grep ‘00:00:00:00:00:00’ /proc/net/arp`
+
+- 网络拓扑
+
+![](img/topology.png)
+
 ### 3.1 TCP Connect 扫描 
 - 手动编写tcp connect 扫描，在host002执行`nc -l -p 53`上开启53端口，抓包结果和预期一致
   ![](img/tcp_connect.png)
