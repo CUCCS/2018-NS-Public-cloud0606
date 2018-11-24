@@ -3,7 +3,7 @@
 ## 1. 实验环境
 - 主机：windows10
 - 虚拟机：virtual box 5.2.18 r124319，4.17.0-kali1-amd64
-- 工具：python3.7.0，scapy2.4.0
+- 工具：python3.7.0, scapy2.4.0, nmap 7.70
 ## 2. 网络扫描知识梳理
 - 目标：
 	- 主机（端口开发情况，网络服务详细信息）
@@ -70,140 +70,188 @@
 			- 获取网络中所有存活的主机 `nmap -sP 222.31.66.128/25`
 			- 获取指定开放端口的服务器列表 `nmap -sT -p 80 -oG – 222.31.66.* | grep open `
 			- 寻找一个给定子网中未使用的ip `nmap -T4 -sP 192.168.2.0/24 && grep ‘00:00:00:00:00:00’ /proc/net/arp`
-
 - 网络拓扑
 
-![](img/topology.png)
+	![](img/topology.png)
 
 ### 3.1 TCP Connect 扫描 
-- 手动编写tcp connect 扫描，在host002执行`nc -l -p 53`上开启53端口，抓包结果和预期一致
-  ![](img/tcp_connect.png)
+根据代码逻辑构造的3种端口
+- OPEN：host002 port 80，在host002开启apache服务，80端口就处于监听模式（试了一下用apache监听80端口）
+- CLOSED：host002 port 53，无操作
+- FILTERED：host003 port 98，定义iptables,在input链上添加一条规则 `iptables -A INPUT -p tcp --dport 98 -j DROP`，使得98端口收到的tcp包直接丢弃，不回复任何包
+#### a. 手动编写代码 
+通过手动编写的tcp connect scan 代码扫描以上3个端口，与预期结果一致
+
+![](img/sT-1.png) 
+	
+使用wireshark flow Graph查看效果
+
+![](img/sT-2.png) 
+#### b. nmap进行同类扫描
+使用nmap进行同类扫描，扫描结果与手动编写的代码相同
+
+![](img/sT-4.png) 
+
+使用wireshark flow Graph查看nmap扫描结果
+
+![](img/sT-3.png) 
+
+
 - 代码：
 
-		###################################
-		# tcp flag意义 
-		# 0x002(SYN)
-		# 0x012(SYN,ACK)
-		# 0x010(ACK)
-		# 0x004(RST)
-		# 0x014(RST,ACK)
-		###################################
-		# type,code 意义
-		# 3,1   Host Unreachable——主机不可达
-        # 3,3	Port Unreachable——端口不可达
-		# 3,2	Protocol Unreachable——协议不可达
-		# 3,9	Destination network administratively prohibited——目的网络被强制禁止
-		# 3,10	Destination host administratively prohibited——目的主机被强制禁止
-		# 3,13	Communication administratively prohibited by filtering——由于过滤，通信被强制禁止
-		###################################
-		def tcp_connect_scan(dst_ip, dst_port, dst_timeout):
-		    src_port = RandShort()
-		    tcp_connect_scan_resp = sr1(IP(dst=dst_ip) / TCP(sport=src_port, dport=dst_port, flags="S"), timeout=dst_timeout)
-		    if (str(type(tcp_connect_scan_resp)) == "<class 'NoneType'>"):# no responses的情况,端口被过滤
-		        return("FILTERED")
-		    elif (tcp_connect_scan_resp.haslayer(TCP)):
-		        if (tcp_connect_scan_resp.getlayer(TCP).flags == 0x12): # (SYN,ACK)
-		            send_rst = sr(IP(dst=dst_ip) / TCP(sport=src_port, dport=dst_port, flags="AR"), timeout=dst_timeout)# 回复ACK,RST
-		            return ("OPEN")
-		        elif (tcp_connect_scan_resp.getlayer(TCP).flags == 0x14):# (RST,ACK)
-		            return ("CLOSED")
-		    else:
-		        return ("CHECKED")
+	```python
+	###################################
+	# tcp flag意义 
+	# 0x002(SYN)
+	# 0x012(SYN,ACK)
+	# 0x010(ACK)
+	# 0x004(RST)
+	# 0x014(RST,ACK)
+	###################################
+	# type,code 意义
+	# 3,1   Host Unreachable——主机不可达
+	# 3,3	Port Unreachable——端口不可达
+	# 3,2	Protocol Unreachable——协议不可达
+	# 3,9	Destination network administratively prohibited——目的网络被强制禁止
+	# 3,10	Destination host administratively prohibited——目的主机被强制禁止
+	# 3,13	Communication administratively prohibited by filtering——由于过滤，通信被强制禁止
+	###################################
+	def tcp_connect_scan(dst_ip, dst_port, dst_timeout):
+		'''
+		:param dst_ip:string,目标IP
+		:param dst_port: 端口号
+		:param dst_timeout:
+		:return:端口状态
+		'''
+		src_port = RandShort()
+		tcp_connect_scan_resp = sr1(IP(dst=dst_ip) / TCP(sport=src_port, dport=dst_port, flags="S"), timeout=dst_timeout)
+		if (str(type(tcp_connect_scan_resp)) == "<class 'NoneType'>"):# no responses的情况,端口被过滤
+			return("FILTERED")
+		elif (tcp_connect_scan_resp.haslayer(TCP)):
+			if (tcp_connect_scan_resp.getlayer(TCP).flags == 0x12): # (SYN,ACK)
+				send_rst = sr(IP(dst=dst_ip) / TCP(sport=src_port, dport=dst_port, flags="AR"), timeout=dst_timeout)# 回复ACK,RST
+				return ("OPEN")
+			elif (tcp_connect_scan_resp.getlayer(TCP).flags == 0x14):# (RST,ACK)
+				return ("CLOSED")
+		else:
+			return ("CHECKED")
+	```
 ### 3.2 UDP scan 
-- 扫描前在host002 执行`nc -u -l -p 53 < /etc/passwd` 开启53端口
-- 执行手动编写udp_scan代码，没有抓到udp包
+根据代码逻辑构造的3种端口
+- OPEN：host002 port 80，执行`nc -u -l -p 80` 开启80端口(再也不能无脑复制粘贴命令 `< /etc/passwd`)
+- CLOSED：host002 port 53，无操作
+- FILTERED：host003 port 98，定义iptables,在input链上添加一条规则如下图，回复的icmp包type=3，code=9，可被判断为被过滤状态
 
-	![](img/udp.png)
+![](img/sU-5.png)
 
-- 由于没有抓到包，所以用nmap进行相同的udp扫描，扫描前在host002 执行`nc -u -l -p 98 < /etc/passwd` 开启98端口。结果：扫描53端口被跳过了？其余与预期结果一致（开启的98端口回复UDP包，关闭的80端口回复ICMP Destination Unreachable）
+#### a. 手动编写代码 
 
-	![](img/nmap_udp.png)
+![](img/sU-1.png)
+
+![](img/sU-2.png)
+
+开放端口，根据代码逻辑，通过重传包后仍然为收到回复，判断为OPEND | FILTEREDD
+![](img/sU-3.png)
+
+#### b. nmap进行同类扫描
+
+![](img/sU-4.png)
+
+以下是上次实验遇到的问题，应该是没有提前抓包的原因
+
+> 由于没有抓到包，所以用nmap进行相同的udp扫描，扫描前在host002 执行`nc -u -l -p 98 < /etc/passwd` 开启98端口。结果：扫描53端口被跳过了？其余与预期结果一致（开启的98端口回复UDP包，关闭的80端口回复ICMP Destination Unreachable）
+
 - 代码:
+	```python
+	def udp_scan(dst_ip, dst_port, dst_timeout):
+		udp_scan_resp = sr1(IP(dst=dst_ip) / UDP(dport=dst_port), timeout=dst_timeout)
+		if (str(type(udp_scan_resp)) == "<class 'NoneType'>"):
+			retrans = []
+			for count in range(0, 3):
+				retrans.append(sr1(IP(dst=dst_ip) / UDP(dport=dst_port), timeout=dst_timeout))
+			for item in retrans:
+				if (str(type(item)) != "<class 'NoneType'>"):
+					udp_scan(dst_ip, dst_port, dst_timeout)
+			return "Open|Filtered"
 
-		def udp_scan(dst_ip, dst_port, dst_timeout):
-		    udp_scan_resp = sr1(IP(dst=dst_ip) / UDP(dport=dst_port), timeout=dst_timeout)
-		    if (str(type(udp_scan_resp)) == "<class 'NoneType'>"):
-		        retrans = []
-		        for count in range(0, 3):
-		            retrans.append(sr1(IP(dst=dst_ip) / UDP(dport=dst_port), timeout=dst_timeout))
-		        for item in retrans:
-		            if (str(type(item)) != "<class 'NoneType'>"):
-		                udp_scan(dst_ip, dst_port, dst_timeout)
-		        return "Open|Filtered"
-		
-		    elif (udp_scan_resp.haslayer(UDP) or udp_scan_resp.getlayer(IP).proto == IP_PROTOS.udp):
-		        return "Open"
-		    elif (udp_scan_resp.haslayer(ICMP)):
-		        if (int(udp_scan_resp.getlayer(ICMP).type) == 3 and int(udp_scan_resp.getlayer(ICMP).code) == 3):
-		            # 3,3 Port Unreachable——端口不可达
-		            return "Closed"
-		        elif (int(udp_scan_resp.getlayer(ICMP).type) == 3 and int(udp_scan_resp.getlayer(ICMP).code) in [1, 2, 9, 10,
-		                                                                                                  13]):
-		            return "Filtered"
-		    else:
-		        return "CHECK"
-
+		elif (udp_scan_resp.haslayer(UDP) or udp_scan_resp.getlayer(IP).proto == IP_PROTOS.udp):
+			return "Open"
+		elif (udp_scan_resp.haslayer(ICMP)):
+			if (int(udp_scan_resp.getlayer(ICMP).type) == 3 and int(udp_scan_resp.getlayer(ICMP).code) == 3):
+				# 3,3 Port Unreachable——端口不可达
+				return "Closed"
+			elif (int(udp_scan_resp.getlayer(ICMP).type) == 3 and int(udp_scan_resp.getlayer(ICMP).code) in [1, 2, 9, 10,
+																									13]):
+				return "Filtered"
+		else:
+			return "CHECK"
+	```
 ### 3.3 TCP SYN scan 
-- 扫描前都在host002执行 `nc -l -p 53` 开启53端口 
-- 手动编写的tcp syn扫描，没有抓到回复包
+端口设置和TCP connect scan一致
 
-	![](img/syn.png)
+#### a. 手动编写代码 
+抓包结果和预期一致，对于开放端口，收到[SYN,ACK]后只回复[RST] (而不是[RST,ACK])体现出了tcp syn 扫描的 **隐蔽** 性，对于关闭端口和被过滤端口的判断与TCP connect scan一致
 
-- nmap tcp syn扫描，抓包结果和预期一致，收到[SYN,ACK]后只回复[RST] (而不是[RST,ACK])体现出了tcp syn 扫描的 **隐蔽** 性
+![](img/sS-1.png)
 
-	![](img/nmap_syn.png)
+
+#### b. nmap同类扫描
+结果与手动编写代码一致
+
+![](img/sS-2.png)
 
 - 代码：
-
-		def tcp_syn_scan(dst_ip, dst_port, dst_timeout):
-		    '参考stealth_scan'
-		    filtered_cnt = 0
-		    closed_cnt = 0
-		    src_port = RandShort()
-		    stealth_scan_resp = sr1(IP(dst=dst_ip) / TCP(sport=src_port, dport=dst_port, flags="S"), timeout=dst_timeout)
-		    if (str(type(stealth_scan_resp)) == "<class 'NoneType'>"): #
-		        return "Filtered"
-		    elif (stealth_scan_resp.haslayer(TCP)):
-		        if (stealth_scan_resp.getlayer(TCP).flags == 0x12):# (SYN,ACK)
-		            # 只回复RST，与connect scan的区别
-		            send_rst = sr(IP(dst=dst_ip) / TCP(sport=src_port, dport=dst_port, flags="R"), timeout=dst_timeout)
-		            return "Open"
-		        elif (stealth_scan_resp.getlayer(TCP).flags == 0x14):# (RST,ACK)
-		            return "Closed"
-		    elif (stealth_scan_resp.haslayer(ICMP)):
-		        if (int(stealth_scan_resp.getlayer(ICMP).type) == 3 and
-		                int(stealth_scan_resp.getlayer(ICMP).code) in [1, 2, 3, 9, 10, 13]):
-		            return "Filtered"
-		    else:
-		        return "CHECK"
+	```python
+	def tcp_syn_scan(dst_ip, dst_port, dst_timeout):
+		'参考stealth_scan'
+		filtered_cnt = 0
+		closed_cnt = 0
+		src_port = RandShort()
+		stealth_scan_resp = sr1(IP(dst=dst_ip) / TCP(sport=src_port, dport=dst_port, flags="S"), timeout=dst_timeout)
+		if (str(type(stealth_scan_resp)) == "<class 'NoneType'>"): #
+			return "Filtered"
+		elif (stealth_scan_resp.haslayer(TCP)):
+			if (stealth_scan_resp.getlayer(TCP).flags == 0x12):# (SYN,ACK)
+				# 只回复RST，与connect scan的区别
+				send_rst = sr(IP(dst=dst_ip) / TCP(sport=src_port, dport=dst_port, flags="R"), timeout=dst_timeout)
+				return "Open"
+			elif (stealth_scan_resp.getlayer(TCP).flags == 0x14):# (RST,ACK)
+				return "Closed"
+		elif (stealth_scan_resp.haslayer(ICMP)):
+			if (int(stealth_scan_resp.getlayer(ICMP).type) == 3 and
+					int(stealth_scan_resp.getlayer(ICMP).code) in [1, 2, 3, 9, 10, 13]):
+				return "Filtered"
+		else:
+			return "CHECK"
+	```
 ### 3.4 Xmas scan
-- 扫描前都在host002执行 `nc -l -p 98` 开启98端口
-- 执行手动编写的tcp Xmas扫描，没有抓到回复包，都被判断为 open | filtered状态
+端口设置和TCP connect scan一致
 
-	![](img/xmas.png)
+#### a. 手动编写代码
+只能区分关闭端口和非关闭端口，无法区分非关闭端口处于开放或是被过滤状态。
 
-- nmap Xmas扫描，在扫描开放的98端口时，没有收到tcp回应包也没有收到ICMP包，按Xmas原理应该判定为98端口为开放，但是nmap判断为 open | filtered（可能考虑到了timeout设置过短导致host002发送了icmp但是host001没有接收到的情况，使结果更加严谨）
+![](img/sX-2.png)
 
-	![](img/nmap_xmas.png)
+#### b. nmap同类扫描
+与预期结果一致, timout设置不同,发送包的数量也和手动编写代码不一样
+
+![](img/sX-1.png)
 
 - 代码：
-
-		def xmas_scan(dst_ip, dst_port, dst_timeout):
-		    xmas_scan_resp = sr1(IP(dst=dst_ip) / TCP(dport=dst_port, flags="FPU"), timeout=dst_timeout)
-		    if (str(type(xmas_scan_resp)) == "<class 'NoneType'>"):
-		        return "Open|Filtered"
-		    elif (xmas_scan_resp.haslayer(TCP)):
-		        if (xmas_scan_resp.getlayer(TCP).flags == 0x14):# (RST,ACK)
-		            return "Closed"
-		    elif (xmas_scan_resp.haslayer(ICMP)):
-		        if (int(xmas_scan_resp.getlayer(ICMP).type) == 3 and int(xmas_scan_resp.getlayer(ICMP).code) in [1, 2, 3, 9, 10,
-		                                                                                                         13]):
-		            return "Filtered"
-		    else:
-		        return "CHECK"
-
-
-
+	```python
+	def xmas_scan(dst_ip, dst_port, dst_timeout):
+		xmas_scan_resp = sr1(IP(dst=dst_ip) / TCP(dport=dst_port, flags="FPU"), timeout=dst_timeout)
+		if (str(type(xmas_scan_resp)) == "<class 'NoneType'>"):
+			return "Open|Filtered"
+		elif (xmas_scan_resp.haslayer(TCP)):
+			if (xmas_scan_resp.getlayer(TCP).flags == 0x14):# (RST,ACK)
+				return "Closed"
+		elif (xmas_scan_resp.haslayer(ICMP)):
+			if (int(xmas_scan_resp.getlayer(ICMP).type) == 3 and int(xmas_scan_resp.getlayer(ICMP).code) in [1, 2, 3, 9, 10,13]):
+				return "Filtered"
+		else:
+			return "CHECK"
+	```
 ## 4. 实验分析
 ### 4.1 UDP scan 扫描失败分析
 - 由于执行手动编写的udp扫描代码时没有抓到包，推测存在的问题：
@@ -219,9 +267,14 @@
 			![](img/udp4.png)
 
 	- 问题：既然wireshark抓包没有问题，为什么手写的程序可以判断53端口为开启，但是看不到任何回复包呢？
+		答案是flow graph过滤类型选择了TCP Flows，当然无法显示icmp或者udp包
+
+
 
 ### 4.2 手写的端口扫描代码普遍收不到回复包
 - 在手写的4个扫描端口代码中，除了TCP connect 扫描能按预期扫描，其他TCP syn扫描，Xmas扫描，UDP扫描都收不到回复的包，而相同功能的nmap工具，可以正常扫描。所以推测 被扫描主机是不是能分辨用scapy自主构造的包，并且不回复呢 ？
+
+	确实在重新设置了两台虚拟机的网络都为host-only之后就没有出现这个问题
 
 ## 参考：
 - [网络安全课本](https://sec.cuc.edu.cn/huangwei/textbook/ns/)
