@@ -58,10 +58,9 @@
 
 至此已经发现url中（`http://192.168.163.3/cat.php?id=1`）cat.php中传入参数id为一个可利用的SQL注入点，开始进一步利用 
 #### 2.2 Exploitation of SQL injections
-### 步骤
 step 1. 分析当前找到的注入点（获取该查询语句的列数，在页面中能回显的是哪一列）
 
-** UNION 关键字 **
+**UNION 关键字**
 - 用法：UNION 操作符用于连接两个以上的 SELECT 语句的结果组合到一个结果集合中。多个 SELECT 语句会删除重复的数据，由于每个 SELECT 语句中的列的数目必须相同，可枚举列数根据错误信息进一步判断。
 - 优点：使用了UNION拜托了原查询语句中表的束缚，可以自行查看系统表内容
 - 缺点：需要注意保持两个查询语句列数一致
@@ -80,7 +79,7 @@ step 1. 分析当前找到的注入点（获取该查询语句的列数，在页
 
     ![](img/20181102-19.png)
 
-** ORDER BY **
+**ORDER BY**
 - 用法：ORDER BY 语句用于根据指定的列对结果集进行排序。若指定的属性列的列号大于查询表的列数，则会报错，可利用该属性进行列数判断
 
     同样， order by 后跟列号1，2，3，4时可正常查询 
@@ -185,7 +184,10 @@ step 3. 从其他表检索信息
     - 成功删除 test.php.haha, `http://192.168.163.3/admin/uploads/test.php3?cmd=ls`
 
         ![](img/20181102-54.png)
-### 4. 其他
+## 参考
+- [From SQL Injection to Shell](https://pentesterlab.com/exercises/from_sqli_to_shell/course)
+- [2018-NS-Public-jckling](https://github.com/CUCCS/2018-NS-Public-jckling/blob/0aacd954db698f695fcd4d37ebde76f579df1160/ns-0x07/%E5%AE%9E%E9%AA%8C%E6%8A%A5%E5%91%8A.md)
+- [2018-NS-Public-tclhh](https://github.com/CUCCS/2018-NS-Public-tclhh/blob/5ed112e213c5c402d827ab7ebf4712b653722ca1/ns-exp7/%E5%AE%9E%E9%AA%8C%E4%B8%83%20%E4%BB%8ESQL%E6%B3%A8%E5%85%A5%E5%88%B0Shell.md)
 
 
     
